@@ -66,9 +66,14 @@ def main(argv):
     p = argparse.ArgumentParser(prog=argv[0])
     p.add_argument('URL')
     p.add_argument('DIR')
+    p.add_argument('DELAY')
     a = p.parse_args(argv[1:])
 
+    delay = int(a.DELAY)
+
     for submission_id, submission_url in get_submission_urls(a.URL):
+        sleep(delay)
+
         page_content, title, image_url = get_submission_info(submission_url)
 
         r = requests.get(image_url, stream=True)
@@ -99,7 +104,7 @@ def main(argv):
         with open(page_out_path, 'wb') as f:
             f.write(page_content)
 
-        sleep(3)
+        sleep(delay)
 
 
 if __name__ == '__main__':
