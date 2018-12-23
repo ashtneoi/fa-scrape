@@ -9,4 +9,4 @@ fi
 
 source .env/bin/activate
 
-pip3 install beautifulsoup4==4.6.3
+pip3 install beautifulsoup4==4.6.3 requests==2.21.0
