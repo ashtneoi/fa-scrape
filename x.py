@@ -26,14 +26,7 @@ def rtake(s, t):
     return s[:-len(t)]
 
 
-def get_submission_urls(gallery_url):
-    r = requests.get(gallery_url)
-    if not r.ok:
-        stderr.write(r.text)
-        r.raise_for_status()
-
-    doc = BeautifulSoup(r.content, 'html.parser')
-    gallery = doc.find('section', id='gallery-gallery')
+def _get_submission_urls(gallery_url, gallery):
     for caption in gallery.find_all('figcaption'):
         href = caption.a['href']
         submission_id = rtake(ltake(href, '/view/'), '/')
@@ -42,6 +35,25 @@ def get_submission_urls(gallery_url):
             f'/full/{submission_id}/',
         )
         yield submission_id, url
+
+
+def get_submission_urls(gallery_url):
+    r = requests.get(gallery_url)
+    if not r.ok:
+        stderr.write(r.text)
+        r.raise_for_status()
+
+    doc = BeautifulSoup(r.content, 'html.parser')
+    gallery = doc.find('section', id='gallery-gallery')
+    next_gallery_a = doc.select_one('a.button-link.right')
+    if next_gallery_a is None:
+        next_gallery_url = None
+    else:
+        next_gallery_url = urllib.parse.urljoin(
+            gallery_url,
+            next_gallery_a['href'],
+        )
+    return next_gallery_url, _get_submission_urls(gallery_url, gallery)
 
 
 def get_submission_info(submission_url):
@@ -71,39 +83,49 @@ def main(argv):
 
     delay = int(a.DELAY)
 
-    for submission_id, submission_url in get_submission_urls(a.URL):
-        sleep(delay)
+    gallery_url = a.URL
+    while gallery_url is not None:
+        print(gallery_url)
+        next_gallery_url, submissions = get_submission_urls(gallery_url)
 
-        page_content, title, image_url = get_submission_info(submission_url)
+        for submission_id, submission_url in submissions:
+            sleep(delay)
 
-        r = requests.get(image_url, stream=True)
-        if not r.ok:
-            stderr.write(r.text)
-            r.raise_for_status()
+            print(submission_url)
+            page_content, title, image_url = get_submission_info(submission_url)
+            title = title.replace('/', '%')
 
-        assert '.' in image_url
-        image_out_path = path.join(
-            a.DIR,
-            '{} {}.{}'.format(
-                submission_id,
-                title,
-                image_url[image_url.rfind('.')+1:],
-            ),
-        )
-        print(image_out_path)
+            sleep(delay)
 
-        with open(image_out_path, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1<<14):
-                f.write(chunk)
+            print(image_url)
+            r = requests.get(image_url, stream=True)
+            if not r.ok:
+                stderr.write(r.text)
+                r.raise_for_status()
 
-        page_out_path = path.join(
-            a.DIR,
-            f'{submission_id} {title}.html',
-        )
+            assert '.' in image_url
+            image_out_path = path.join(
+                a.DIR,
+                '{} {}.{}'.format(
+                    submission_id,
+                    title,
+                    image_url[image_url.rfind('.')+1:],
+                ),
+            )
 
-        with open(page_out_path, 'wb') as f:
-            f.write(page_content)
+            with open(image_out_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1<<14):
+                    f.write(chunk)
 
+            page_out_path = path.join(
+                a.DIR,
+                f'{submission_id} {title}.html',
+            )
+
+            with open(page_out_path, 'wb') as f:
+                f.write(page_content)
+
+        gallery_url = next_gallery_url
         sleep(delay)
 
 
