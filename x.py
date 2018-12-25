@@ -64,10 +64,14 @@ def get_submission_info(submission_url):
 
     doc = BeautifulSoup(r.content, 'html.parser')
     image = doc.find('img', id='submissionImg')
-    image_url = urllib.parse.urljoin(
-        submission_url,
-        image['src'],
-    )
+    if image is None:
+        print("!! no image !!")
+        image_url = None
+    else:
+        image_url = urllib.parse.urljoin(
+            submission_url,
+            image['src'],
+        )
 
     title = doc.find('meta', property='og:title')['content']
 
@@ -97,25 +101,29 @@ def main(argv):
 
             sleep(delay)
 
-            print(image_url)
-            r = requests.get(image_url, stream=True)
-            if not r.ok:
-                stderr.write(r.text)
-                r.raise_for_status()
+            if image_url is not None:
+                print(image_url)
+                r = requests.get(image_url, stream=True)
+                if not r.ok:
+                    if r.status_code == 404:
+                        print("!! 404 !!")
+                    else:
+                        stderr.write(r.text)
+                        r.raise_for_status()
+                else:
+                    assert '.' in image_url
+                    image_out_path = path.join(
+                        a.DIR,
+                        '{} {}.{}'.format(
+                            submission_id,
+                            title,
+                            image_url[image_url.rfind('.')+1:],
+                        ),
+                    )
 
-            assert '.' in image_url
-            image_out_path = path.join(
-                a.DIR,
-                '{} {}.{}'.format(
-                    submission_id,
-                    title,
-                    image_url[image_url.rfind('.')+1:],
-                ),
-            )
-
-            with open(image_out_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=1<<14):
-                    f.write(chunk)
+                    with open(image_out_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=1<<14):
+                            f.write(chunk)
 
             page_out_path = path.join(
                 a.DIR,
